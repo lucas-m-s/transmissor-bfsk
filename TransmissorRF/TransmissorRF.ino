@@ -10,7 +10,7 @@
 #define TAM_PACOTE_DADOS 18 // Tamanho do pacote de dados em bits
 
 #define TEMPO_BIT_US 1000 // 1000 us por bit (1 ms)
-#define TEMPO_MORTO_US 500   // 500 us de tempo morto (0,5 ms)
+#define TEMPO_MORTO_US 1000   // 1000 us de tempo morto (1 ms)
 #define TEMPO_SILENCIO_MS 100 // 100 ms de silêncio
 
 void enviarBit(uint8_t valorBit); // Função para enviar um único bit usando a lógica BFSK
@@ -30,9 +30,9 @@ void setup() {
   digitalWrite(TX_PIN_1, LOW);
   digitalWrite(TX_PIN_0, LOW);
 
-  Serial.begin(115200);
-  Serial.println("Transmissor BFSK Pronto!");
-  Serial.println("Digite um numero entre 0 e 255 e pressione Enter:");
+  // Serial.begin(115200);
+  // Serial.println("Transmissor BFSK Pronto!");
+  // Serial.println("Digite um numero entre 0 e 255 e pressione Enter:");
 }
 
 void loop() {
@@ -65,13 +65,13 @@ void enviarStreamBits(uint32_t pacoteDados) {
     uint8_t bitAtual = bitRead(pacoteDados, i);
       
     // Mostra no monitor do próprio transmissor o que ele está jogando no ar
-    Serial.print(bitAtual);
+    // Serial.print(bitAtual);
 
     // Envia fisicamente pelos rádios
     enviarBit(bitAtual);
     if (i != 0) delayMicroseconds(TEMPO_MORTO_US);
   }  
-  Serial.println(" -> [Enviado!]");
+  // Serial.println(" -> [Enviado!]");
 }
 
 uint32_t montarPacoteDados() {

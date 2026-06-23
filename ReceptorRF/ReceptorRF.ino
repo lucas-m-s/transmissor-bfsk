@@ -11,12 +11,12 @@
 #define LED4_PIN 7
 
 #define TEMPO_BIT_US 1000 // 1000 us  
-#define MARGEM_ERRO 300 // 300 us     
+#define MARGEM_ERRO 200 // 200 us     
 #define TAM_PACOTE_DADOS 18 // Tamanho do pacote de dados em bits
 
-#define TIMEOUT_SYNC_US 5000 // 5000 us de sincronia (5 ms). Acima disso considera-se o fim do pacote anterior
+#define TIMEOUT_SYNC_US 6000 // 6000 us de sincronia (6 ms). Acima disso considera-se o fim do pacote anterior
 
-#define TIMEOUT_RESET_MS 2000 // Reseta pinos dos LED se nenhum pacote válido chegar dentro do timeout
+#define TIMEOUT_RESET_MS 1000 // Reseta pinos dos LED se nenhum pacote válido chegar dentro do timeout
 
 volatile uint32_t bufferRF = 0; 
 volatile uint8_t ibuf = 0;
@@ -40,7 +40,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(RX_PIN_1), isrBit1_433MHz, CHANGE);
   attachInterrupt(digitalPinToInterrupt(RX_PIN_0), isrBit0_315MHz, CHANGE);
   
-  Serial.println("Receptor Mega Iniciado. Aguardando comandos para os LEDs...");
+  // Serial.println("Receptor Mega Iniciado. Aguardando comandos para os LEDs...");
 }
 
 void loop() {
@@ -54,13 +54,16 @@ void loop() {
     interrupts();
 
     // Envia direto para validação e extração
-    /*bool ret =*/ processarDadosRecebidos(pacoteParaProcessar);
-    // if (ret) ultimoPacotePronto = millis();
+    bool ret = processarDadosRecebidos(pacoteParaProcessar);
+    if (ret) ultimoPacotePronto = millis();
+    else {
+      Serial.println(pacoteParaProcessar, BIN);
+    }
   }
 
-  // unsigned long tempoSemPacoteValido = millis() - ultimoPacotePronto;
-  // if (tempoSemPacoteValido > TIMEOUT_RESET_MS)
-  //   resetPinos();
+  unsigned long tempoSemPacoteValido = millis() - ultimoPacotePronto;
+  if (tempoSemPacoteValido > TIMEOUT_RESET_MS)
+    resetPinos();
 }
 
 // ROTINA DE INTERRUPÇÃO PARA O MÓDULO 433MHz (BIT 1)
