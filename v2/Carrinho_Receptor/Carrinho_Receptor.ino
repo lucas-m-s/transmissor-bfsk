@@ -1,12 +1,11 @@
-// --------- ARDUINO MEGA CODE ----------
+// --- PINOS ESP32 ---
+#define RX_PIN_1 32 // Módulo 433MHz (Recebe o Bit 1 e Sincronismos)
+#define RX_PIN_0 33 // Módulo 315MHz (Recebe o Bit 0)
 
-#define RX_PIN_1 2 // Módulo 433MHz (Recebe o Bit 1 e Sincronismos). Pino de Interrupção 0
-#define RX_PIN_0 3 // Módulo 315MHz (Recebe o Bit 0). Pino de Interrupção 1
-
-#define IN1_PIN 4
-#define IN2_PIN 5
-#define IN3_PIN 6
-#define IN4_PIN 7
+#define IN1_PIN 25
+#define IN2_PIN 26
+#define IN3_PIN 27
+#define IN4_PIN 14
 
 // Tolerâncias de tempo (em microssegundos)
 #define TEMPO_SYNC_START_MIN 200
@@ -70,7 +69,13 @@ volatile unsigned long tempoFimSyncStart = 0; // Marca o Início absoluto da jan
 
 unsigned long ultimaAtualizacao = 0; // Marca o tempo em que os pinos de saída foram atualizados pela última vez
 
+void IRAM_ATTR isrTrataRX1();
+void IRAM_ATTR isrTrataRX0();
+
 void setup() {
+  // Reduz a frequência da CPU para 80MHz para economizar energia
+  setCpuFrequencyMhz(80);
+  
   pinMode(RX_PIN_1, INPUT);
   pinMode(RX_PIN_0, INPUT);
   
@@ -160,7 +165,7 @@ void loop() {
 }
 
 // ISR para o módulo de 433MHz (RX_1 e Sincronização)
-void isrTrataRX1() {
+void IRAM_ATTR isrTrataRX1() {
   unsigned long agora = micros();
 
   // Ponto 2: Timeout de segurança (15ms). Se estourar, aborta o pacote.
@@ -208,7 +213,7 @@ void isrTrataRX1() {
 }
 
 // ISR para o módulo de 315MHz (RX_0)
-void isrTrataRX0() {
+void IRAM_ATTR isrTrataRX0() {
   unsigned long agora = micros();
   
   if (digitalRead(RX_PIN_0) == HIGH) {
