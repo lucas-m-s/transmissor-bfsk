@@ -1,12 +1,13 @@
-// --------- ARDUINO MEGA CODE ----------
+// --- ARDUINO MEGA CODE ---
+#define RX_PIN_1 2 // Módulo 433MHz (Recebe o Bit 1 e Sincronismos)
+#define RX_PIN_0 3 // Módulo 315MHz (Recebe o Bit 0)
 
-#define RX_PIN_1 2 // Módulo 433MHz (Recebe o Bit 1 e Sincronismos). Pino de Interrupção 0
-#define RX_PIN_0 3 // Módulo 315MHz (Recebe o Bit 0). Pino de Interrupção 1
-
-#define LED_BTN1 8
-#define LED_BTN2 9
-#define LED_BTN3 10
-#define LED_BTN4 11
+#define ENA_PIN 32
+#define IN1_PIN 4
+#define IN2_PIN 5
+#define IN3_PIN 6
+#define IN4_PIN 7
+#define ENB_PIN 14
 
 // Tolerâncias de tempo (em microssegundos)
 #define TEMPO_SYNC_START_MIN 200
@@ -20,6 +21,36 @@
 #define MAX_BUFFER 20
 
 #define TIMEOUT_ATUALIZACAO 1000 // Timeout de atualização em ms
+
+class DCMotor {  
+  int spd = 255, pin1, pin2;
+  
+  public:  
+  
+    void Pinout(int in1, int in2){ // Pinout é o método para a declaração dos pinos que vão controlar o objeto motor
+      pin1 = in1;
+      pin2 = in2;
+      pinMode(pin1, OUTPUT);
+      pinMode(pin2, OUTPUT);
+      }   
+    void Speed(int in1){ // Speed é o método que irá ser responsável por salvar a velocidade de atuação do motor
+      spd = in1;
+      }     
+    void Forward(){ // Forward é o método para fazer o motor girar para frente
+      analogWrite(pin1, spd);
+      digitalWrite(pin2, LOW);
+      }   
+    void Backward(){ // Backward é o método para fazer o motor girar para trás
+      digitalWrite(pin1, LOW);
+      analogWrite(pin2, spd);
+      }
+    void Stop(){ // Stop é o metodo para fazer o motor ficar parado.
+      digitalWrite(pin1, LOW);
+      digitalWrite(pin2, LOW);
+      }
+};
+
+DCMotor Motor1, Motor2;
 
 // Estrutura para armazenar o evento de cada pulso
 struct PulsoRF {
@@ -40,28 +71,29 @@ volatile unsigned long tempoFimSyncStart = 0; // Marca o Início absoluto da jan
 
 unsigned long ultimaAtualizacao = 0; // Marca o tempo em que os pinos de saída foram atualizados pela última vez
 
+void isrTrataRX1();
+void isrTrataRX0();
+void pararCarrinho();
+
 void setup() {
-  // Serial.begin(115200);
+  //Serial.begin(115200);
   
   pinMode(RX_PIN_1, INPUT);
   pinMode(RX_PIN_0, INPUT);
   
-  pinMode(LED_BTN1, OUTPUT);
-  pinMode(LED_BTN2, OUTPUT);
-  pinMode(LED_BTN3, OUTPUT);
-  pinMode(LED_BTN4, OUTPUT);
-
-  digitalWrite(LED_BTN1, LOW);
-  digitalWrite(LED_BTN2, LOW);
-  digitalWrite(LED_BTN3, LOW);
-  digitalWrite(LED_BTN4, LOW);
+  // Seleção dos pinos que cada motor usará, como descrito na classe.
+  Motor1.Pinout(IN1_PIN, IN2_PIN);
+  Motor2.Pinout(IN3_PIN, IN4_PIN);
+  pararCarrinho();
 
   // Inicia escutando APENAS o 433MHz em busca do Sincronismo
   attachInterrupt(digitalPinToInterrupt(RX_PIN_1), isrTrataRX1, CHANGE);
+  //attachInterrupt(digitalPinToInterrupt(RX_PIN_0), isrTrataRX0, CHANGE);
 }
 
 void loop() {
   if (pacotePronto) {
+    //Serial.println(pacotePronto, BIN);
     // 1. Copia os dados de forma segura
     PulsoRF bufferLocal[MAX_BUFFER];
     uint8_t tamanhoLocal = 0;
@@ -122,16 +154,16 @@ void loop() {
       uint8_t checksumRecebido = pacoteRecebido & 0b111;
 
       if (checksumEsperado == checksumRecebido) {
-        digitalWrite(LED_BTN1, bitRead(pacoteRecebido, 3));
-        digitalWrite(LED_BTN2, bitRead(pacoteRecebido, 4));
-        digitalWrite(LED_BTN3, bitRead(pacoteRecebido, 5));
-        digitalWrite(LED_BTN4, bitRead(pacoteRecebido, 6));
+        uint8_t btn1 = bitRead(pacoteRecebido, 3);
+        uint8_t btn2 = bitRead(pacoteRecebido, 4);
+        uint8_t btn3 = bitRead(pacoteRecebido, 5);
+        uint8_t btn4 = bitRead(pacoteRecebido, 6);
+        moverCarrinho(btn1, btn2, btn3, btn4);
 
         ultimaAtualizacao = millis();
       }
     }
   }
-
   // Serial.print("Recebendo = ");
   // Serial.print(recebendo);
   // Serial.print("\t");
@@ -142,7 +174,7 @@ void loop() {
   // Serial.println(pacotePronto);
 
   if ((millis() - ultimaAtualizacao) >= TIMEOUT_ATUALIZACAO)
-    resetPinos();
+    pararCarrinho();
 }
 
 // ISR para o módulo de 433MHz (RX_1 e Sincronização)
@@ -195,6 +227,9 @@ void isrTrataRX1() {
 
 // ISR para o módulo de 315MHz (RX_0)
 void isrTrataRX0() {
+  // Se não recebemos um Sync Start válido ainda, ignoramos as mudanças neste pino
+  //if (!recebendo) return;
+
   unsigned long agora = micros();
   
   if (digitalRead(RX_PIN_0) == HIGH) {
@@ -213,9 +248,44 @@ void isrTrataRX0() {
   }
 }
 
-void resetPinos() {
-  digitalWrite(LED_BTN1, LOW);
-  digitalWrite(LED_BTN2, LOW);
-  digitalWrite(LED_BTN3, LOW);
-  digitalWrite(LED_BTN4, LOW);
+void moverCarrinho(uint8_t btn1, uint8_t btn2,
+                   uint8_t btn3, uint8_t btn4) {
+
+  // Evita comandos opostos/inválidos simultâneos (ex: frente+trás juntos)
+  bool frenteTras = btn1 && btn2;
+  bool esqDir = btn3 && btn4;
+
+  Motor1.Speed(198); // A velocidade do motor pode variar de 0 a 255, onde 255 é a velocidade máxima.
+  Motor2.Speed(198);
+
+  if (!frenteTras && !esqDir) {
+    if (btn1) {
+      // Frente: s1->s2 (+12) e s3->s4 (+12)
+      Motor1.Forward(); 
+      Motor2.Forward();
+    } else if (btn2) {
+      // Trás: s1<-s2 (-12) e s3<-s4 (-12)
+      Motor1.Backward();
+      Motor2.Backward();
+    } else if (btn3) {
+      // Esquerda: motor A trás, motor B frente (gira no eixo)
+      Motor1.Backward();
+      Motor2.Forward();
+    } else if (btn4) {
+      // Direita: motor A frente, motor B trás (gira no eixo)
+      Motor1.Forward();
+      Motor2.Backward();
+    } else {
+      pararCarrinho();
+    }
+  } else {
+    // Se houver comando conflitante, para por segurança
+    pararCarrinho();
+  }
+
+}
+
+void pararCarrinho() {
+  Motor1.Stop();
+  Motor2.Stop();
 }

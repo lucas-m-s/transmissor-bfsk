@@ -34,6 +34,9 @@ void montarPacoteDados();
 void enviarSync(bool flag);
 
 void setup() {
+  // Reduz a frequência da CPU para 80MHz para economizar energia
+  setCpuFrequencyMhz(80);
+  
   pinMode(TX_PIN_1, OUTPUT);
   pinMode(TX_PIN_0, OUTPUT);
   
@@ -44,12 +47,11 @@ void setup() {
   // Garante que ambos comecem desligados
   digitalWrite(TX_PIN_1, LOW);
   digitalWrite(TX_PIN_0, LOW);
-
-  // Inicializa a variável com o primeiro pacote
-  montarPacoteDados();
 }
 
 void loop() {
+  montarPacoteDados();
+
   // Verifica se o período de silêncio já passou
   if (millis() - tempoUltimoEnvio >= TEMPO_SILENCIO_MS) {
     // Fim do silêncio: envia imediatamente o pacote mais recente e atualiza o cronômetro
@@ -57,9 +59,6 @@ void loop() {
     enviarStreamBits(pacoteDadosPronto);
     enviarSync(1);
     tempoUltimoEnvio = millis(); 
-  } else {
-    // Durante o silêncio: processa o debounce e prepara o próximo pacote
-    montarPacoteDados();
   }
 }
 
